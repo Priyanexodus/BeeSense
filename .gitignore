@@ -1,0 +1,52 @@
+# ======================
+# Python generated files
+# ======================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# ============
+# Build output
+# ============
+build/
+dist/
+wheels/
+*.egg-info/
+
+# =====================
+# Virtual environments
+# =====================
+.venv/
+venv/
+
+# ==========
+# UV / Python
+# ==========
+.python-version
+
+# ===================
+# Machine Learning
+# ===================
+artifacts/
+*.joblib
+*.pkl
+*.pth
+*.wav
+
+
+# ========
+# Logs
+# ========
+*.log
+
+# ==========
+# VS Code
+# ==========
+.vscode/
+
+# ========
+# OS files
+# ========
+.DS_Store
+Thumbs.db
