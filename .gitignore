@@ -28,10 +28,6 @@ venv/
 # ===================
 # Machine Learning
 # ===================
-artifacts/
-*.joblib
-*.pkl
-*.pth
 *.wav
 
 
