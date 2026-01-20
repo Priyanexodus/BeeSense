@@ -82,7 +82,7 @@ class BeeInference:
         weather_pressure = data_dict['weather pressure']
         rain = data_dict["rain"]
         time = data_dict["time"]
-
+        
         audio_tensor = self.preprocess_audio(audio_path)
 
         # Scale telemetry using the SAVED scaler
@@ -97,16 +97,4 @@ class BeeInference:
         # Convert numeric ID back to original label
         return self.le.inverse_transform([pred_id])[0]
 
-test_data = {
-    "audio_path" : "2022-06-05--17-41-01_2__segment0.wav",
-    'hive temp':  29.84,
-    'hive humidity': 43.53,
-    'hive pressure':  1007.27,
-    'weather temp': 24.15,
-    'weather humidity':  68,
-    'weather pressure':  1013,
-    'rain':  0,
-    'time': 0.708
-}
-engine = BeeInference("./artifacts")
-print(engine.predict(test_data))
+
