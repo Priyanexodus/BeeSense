@@ -1,0 +1,46 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Bee Health Monitoring Lambda
+Globals:
+  Function:
+    Timeout: 120
+    MemorySize: 2048
+Resources:
+  BeeHealthFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      PackageType: Image
+      Architectures:
+      - x86_64
+      Policies:
+      - S3ReadPolicy:
+          BucketName:
+            Ref: AudioBucketName
+      Events:
+        BeeHealthAPI:
+          Type: Api
+          Properties:
+            Path: /predict
+            Method: post
+      ImageUri: beehealthfunction:python3.10-v1
+    Metadata:
+      DockerContext: /home/priyan/projects/lambda-pytorch-example/hello_world
+      DockerTag: python3.10-v1
+      Dockerfile: Dockerfile
+      SamResourceId: BeeHealthFunction
+Parameters:
+  AudioBucketName:
+    Type: String
+    Description: Name of the S3 bucket containing audio files
+    Default: bee-sense
+Outputs:
+  BeeHealthApi:
+    Description: API Gateway endpoint URL
+    Value:
+      Fn::Sub: https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/predict/
+  BeeHealthFunction:
+    Description: Lambda Function ARN
+    Value:
+      Fn::GetAtt:
+      - BeeHealthFunction
+      - Arn

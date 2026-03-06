@@ -1,0 +1,13 @@
+version = 0.1
+
+[default.deploy.parameters]
+stack_name = "bee-sense"
+resolve_s3 = true
+s3_prefix = "bee-sense"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+image_repositories = ["BeeHealthFunction=097155545354.dkr.ecr.eu-north-1.amazonaws.com/beesense1764c5c7/beehealthfunction54016c91repo"]
+parameter_overrides = "AudioBucketName=\"bee-sense\""
+
+[default.global.parameters]
+region = "eu-north-1"
