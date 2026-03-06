@@ -1,0 +1,171 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: BeeSense Audio Processing Architecture
+
+Globals:
+  Function:
+    Runtime: python3.11
+    Timeout: 300
+    MemorySize: 2024
+    Environment:
+      Variables:
+        BEESENSE_BUCKET: bee-sense
+        CHUNKS_TABLE: !Ref AudioChunksTable
+        RAW_AUDIO_PREFIX: raw-audio-chunks/
+        PROCESSED_AUDIO_PREFIX: processed-audio/
+
+Resources:
+  AudioChunksTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: beesense-audio-chunks
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: session_id
+          AttributeType: S
+        - AttributeName: chunk_index
+          AttributeType: N
+      KeySchema:
+        - AttributeName: session_id
+          KeyType: HASH
+        - AttributeName: chunk_index
+          KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+
+  AudioChunkReceiverFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: beesense-audio-chunk-receiver
+      CodeUri: functions/chunk_receiver/
+      Handler: app.lambda_handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AudioChunksTable
+        - S3CrudPolicy:
+            BucketName: bee-sense
+      Environment:
+        Variables:
+          MAX_CHUNK_AGE_SECONDS: '3600'
+      Events:
+        IoTCoreRule:
+          Type: IoTRule
+          Properties:
+            Sql: "SELECT * FROM 'beesense/audio/chunk'"
+            AwsIotSqlVersion: '2016-03-23'
+
+  AudioStitcherFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: beesense-audio-stitcher
+      CodeUri: functions/audio_stitcher/
+      Handler: app.lambda_handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AudioChunksTable
+        - S3CrudPolicy:
+            BucketName: bee-sense
+      Events:
+        DynamoDBStream:
+          Type: DynamoDB
+          Properties:
+            Stream: !GetAtt AudioChunksTable.StreamArn
+            StartingPosition: TRIM_HORIZON
+            BatchSize: 10
+            MaximumBatchingWindowInSeconds: 5
+
+  SessionCompletionFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: beesense-session-completion
+      CodeUri: functions/session_completion/
+      Handler: app.lambda_handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AudioChunksTable
+        - S3CrudPolicy:
+            BucketName: bee-sense
+        - LambdaInvokePolicy:
+            FunctionName: !Ref AudioStitcherFunction
+      Events:
+        IoTCoreRule:
+          Type: IoTRule
+          Properties:
+            Sql: "SELECT * FROM 'beesense/audio/complete'"
+            AwsIotSqlVersion: '2016-03-23'
+
+  AudioChunkApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: prod
+      Cors:
+        AllowMethods: "'POST, GET, OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'"
+        AllowOrigin: "'*'"
+
+  AudioChunkHttpFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: beesense-audio-chunk-http
+      CodeUri: functions/chunk_receiver_http/
+      Handler: app.lambda_handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AudioChunksTable
+        - S3CrudPolicy:
+            BucketName: bee-sense
+      Events:
+        PostChunk:
+          Type: Api
+          Properties:
+            RestApiId: !Ref AudioChunkApi
+            Path: /audio/chunk
+            Method: POST
+        CompleteSession:
+          Type: Api
+          Properties:
+            RestApiId: !Ref AudioChunkApi
+            Path: /audio/complete
+            Method: POST
+
+  ChunkReceiverLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AudioChunkReceiverFunction}'
+      RetentionInDays: 7
+
+  StitcherLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AudioStitcherFunction}'
+      RetentionInDays: 7
+
+  SessionCompletionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${SessionCompletionFunction}'
+      RetentionInDays: 7
+
+Outputs:
+  AudioChunkApiEndpoint:
+    Description: API Gateway endpoint URL for audio chunk upload
+    Value: !Sub "https://${AudioChunkApi}.execute-api.${AWS::Region}.amazonaws.com/prod"
+
+  AudioChunksTableName:
+    Description: DynamoDB table for tracking audio chunks
+    Value: !Ref AudioChunksTable
+
+  S3BucketName:
+    Description: S3 bucket for audio storage
+    Value: bee-sense
+
+  ChunkReceiverFunctionArn:
+    Description: Audio Chunk Receiver Lambda ARN
+    Value: !GetAtt AudioChunkReceiverFunction.Arn
+
+  StitcherFunctionArn:
+    Description: Audio Stitcher Lambda ARN
+    Value: !GetAtt AudioStitcherFunction.Arn
